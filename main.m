@@ -11,9 +11,9 @@ mh = 4.3;
 
 % Spring/Damper Params
 kb = 6126;
-kn = 0;
-bb = 1200;
-bn = 0;
+kn = 25;
+bb = 120;
+bn = 0.5;
 
 % Other Variables
 g = 9.81; % m/s
@@ -61,7 +61,7 @@ theta_t_ddot = A_t_12 * theta_t + A_t_22 * theta_t_dot; % CHECK THIS
 
 %% Head Simulation
 x_h = zeros(n, 2);
-x_h(1, :) = [0; 0];
+x_h(1, :) = [50; 0] * (pi/180);
 
 % Conversion
 theta_t_rad = theta_t * pi/180;
@@ -71,8 +71,8 @@ theta_t_ddot_rad = theta_t_ddot * pi/180;
 % Numerical Integration
 for i = 1:n-1
      % Current state
-     theta_h = x_h(i,1) * pi/180;
-     theta_h_dot = x_h(i,2) * pi/180;
+     theta_h = x_h(i,1);
+     theta_h_dot = x_h(i,2);
     
      theta_t_i = theta_t_rad(i);
      theta_t_dot_i = theta_t_dot_rad(i);
