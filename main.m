@@ -11,101 +11,109 @@ mh = 4.3;
 
 % Spring/Damper Params
 kb = 6126;
-kn = 35500;
+kn = 0;
 bb = 1200;
-bn = 421;
+bn = 0;
 
 % Other Variables
 g = 9.81; % m/s
 l_body = lt*lh;
 
-% Plotting Colors
-Colors = {
-    [0.0000 0.4470 0.7410],
-    [0.8500 0.3250 0.0980],
-    [0.9290 0.6940 0.1250],
-    [0.4940 0.1840 0.5560],
-    [0.4660 0.6740 0.1880],
-    [0.3010 0.7450 0.9330],
-    [0.6350 0.0780 0.1840]
-};
 
 %% Torso Simulation
 % Equation Break-up
-den = mt * lt^2;
-A_12 = (3/2) * (mt*lt*g - 2*kb) / den;
-A_22 = - 3*bb / (mt*lt^2);
+A_t_12 = ((3/2) * (mt*lt*g - 2*kb)) / (mt*lt^2);
+A_t_22 = - (3*bb) / (mt*lt^2);
 
 % State Space
-A = [0 1;
-     A_12 A_22];
-B = [0; 0];
+A_t = [0 1;
+     A_t_12 A_t_22];
+B_t = [0; 0];
 C = eye(2,2);
 D = [0; 0];
 
 IC = [50; 0];
 
 % Simulation
-sys = ss(A,B,C,D);
+sys = ss(A_t,B_t,C,D);
 t = 0:0.001:2;
-u = zeros(1, length(t));
-y = lsim(sys, u, t, IC);
+n = length(t);
+u = zeros(1, n);
+x_t = lsim(sys, u, t, IC);
 
-%% Animation of Torso with Spring and Damper
-% Create figure
-figure('Position', [100, 100, 800, 600]);
-h_ax = axes('XLim', [-1.2*lt, 1.2*lt], 'YLim', [-0.2, 1.2*lt]);
-axis equal;
-grid on;
-hold on;
+theta_t = x_t(:,1);
+theta_t_dot = x_t(:,2);
+theta_t_ddot = A_t_12 * theta_t + A_t_22 * theta_t_dot; % CHECK THIS
 
-% Initialize graphics objects
-torso = line([0, 0], [0, 0], 'LineWidth', 1, 'Color', Colors{1});
-spring = line([0, 0], [0, 0], 'LineWidth', 1, 'Color', Colors{2}, 'LineStyle', ':');
-damper = line([0, 0], [0, 0], 'LineWidth', 1, 'Color', Colors{5}, 'LineStyle', '--');
-base = line([-0.2, 0.2], [0, 0], 'LineWidth', 1, 'Color', 'k');
-title('Torso Simulation with Spring and Damper');
-xlabel('X position (m)');
-ylabel('Y position (m)');
 
-% Draw legend
-legend('Torso', 'Spring', 'Damper', 'Base', 'Location', 'best');
 
-% Animation loop
-for i = 1:10:length(t)
-    % Get current angle
-    theta = y(i, 1) * pi/180;  % Convert to radians if your theta is in degrees
+% %% Animation of Torso with Spring and Damper
+% animateTorso(t, x_t, lt)
+% 
+% % Final plot showing the trajectory
+% figure;
+% plot(t, theta_t, 'LineWidth', 2);
+% xlabel('Time (s)');
+% ylabel('Angle (degrees)');
+% title('Torso Angle vs Time');
+% grid on;
+
+
+%% Head Simulation
+x_h = zeros(n, 2);
+x_h(1, :) = [0; 0];
+
+% Conversion
+theta_t_rad = theta_t * pi/180;
+theta_t_dot_rad = theta_t_dot * pi/180;
+theta_t_ddot_rad = theta_t_ddot * pi/180;
+
+% Numerical Integration
+for i = 1:n-1
+     % Current state
+     theta_h = x_h(i,1) * pi/180;
+     theta_h_dot = x_h(i,2) * pi/180;
     
-    % Calculate torso endpoint
-    x_torso = lt * sin(theta);
-    y_torso = lt * cos(theta);
+     theta_t_i = theta_t_rad(i);
+     theta_t_dot_i = theta_t_dot_rad(i);
+     theta_t_ddot_i = theta_t_ddot_rad(i);
     
-    % Update torso position
-    set(torso, 'XData', [0, x_torso], 'YData', [0, y_torso]);
+     % Calculate coefficients for this time step
+     den = mh*lh^2;
+     A_h_12 = - (kn + mh*l_body*(theta_t_ddot_i*sin(theta_t_i)+theta_t_dot_i^2*cos(theta_t_i))-mh*g*lh) / den;
+     A_h_22 = - bn / den;
+     A_h = [0, 1; 
+          A_h_12, A_h_22];
     
-    % Calculate spring attachment point (at top of torso)
-    spring_x = [x_torso, 0];   % Spring is attached to a fixed point at x=0
-    spring_y = [y_torso, lt];  % Spring is attached to a fixed point at y=lt
+    % Calculate forcing term (input from torso motion)
+     B_h = [0;
+          lt / lh];
     
-    % Update spring position
-    set(spring, 'XData', spring_x, 'YData', spring_y);
+     u = theta_t_ddot_i*sin(theta_t_i)+theta_t_dot_i^2*cos(theta_t_i);
+     % Current state derivative: ẋ = Ax + B
+     x_h_dot = A_h * [theta_h; theta_h_dot] + B_h * u;
     
-    % Update damper position (parallel to spring)
-    set(damper, 'XData', spring_x, 'YData', spring_y);
-    
-    % Add text for current time and angle
-    delete(findobj(h_ax, 'Type', 'text'));
-    text(-1.1*lt, 1.1*lt, sprintf('Time: %.2f s', t(i)), 'FontSize', 10);
-    text(-1.1*lt, 1.0*lt, sprintf('Angle: %.2f deg', y(i,1)), 'FontSize', 10);
-    
-    drawnow;
-    pause(0.01);
+     % Numerical integration (Euler method)
+     dt = t(i+1) - t(i);
+     x_h(i+1,1) = x_h(i,1) + x_h_dot(1) * dt;
+     x_h(i+1,2) = x_h(i,2) + x_h_dot(2) * dt;
 end
 
-% Final plot showing the trajectory
+% Extract results
+theta_h = x_h(:,1) * (180/pi);         % Head angle (degrees)
+theta_h_dot = x_h(:,2)  * (180/pi);     % Head angular velocity (degrees/s)
+
+%% Animation of Torso and Head
+% Animation of both Torso and Head
 figure;
-plot(t, y(:,1), 'LineWidth', 2);
+animateTorsoAndHead(t, theta_t, theta_h, lt, lh)
+
+% Comparison plot showing both angles
+figure;
+plot(t, theta_t, 'LineWidth', 2); hold on;
+plot(t, theta_h, 'LineWidth', 2);
 xlabel('Time (s)');
 ylabel('Angle (degrees)');
-title('Torso Angle vs Time');
+title('Torso and Head Angles');
+legend('Torso', 'Head');
 grid on;
