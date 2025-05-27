@@ -7,6 +7,7 @@ lt = 0.47;    % Torso length (m)
 lh = 0.21;    % Head/neck length (m)
 mt = 60.5;    % Torso mass (kg)
 mh = 4.3;     % Head mass (kg)
+nfig = 0;
 
 % Neck stiffness & damping
 kb = 6126;         % Torso stiffness
@@ -87,25 +88,71 @@ for i = 1:n-1
 
     % Euler integration
     x_h_dot = A_h * [theta_h; theta_h_dot] + B_h * u;
+
+    % Store the derivatives for this time step
+    x_h_dot_history(i,:) = x_h_dot';
+
     dt = t(i+1) - t(i);
     x_h(i+1,1) = x_h(i,1) + x_h_dot(1) * dt;
     x_h(i+1,2) = x_h(i,2) + x_h_dot(2) * dt;
 end
 
+% Calculate the final time step derivative (can use previous step or set to zero)
+x_h_dot_history(n,:) = x_h_dot_history(n-1,:);  % Use last calculated value for final time step
+
+
 % Convert to degrees
-theta_h = x_h(:,1) * 180/pi;
-theta_h_dot = x_h(:,2) * 180/pi;
+theta_h_deg = x_h(:,1) * 180/pi;
+theta_h_dot_deg = x_h(:,2) * 180/pi;
+theta_h_ddot_deg = x_h_dot_history(:,2) * 180/pi;  % Angular acceleration in deg/s²
+theta_h_ddot = theta_h_ddot_deg * pi/180;
+
+g_force = (lh * theta_h_ddot)  / 9.8;
+
+
 
 %% Animation (uses your existing function)
-figure;
-animateTorsoAndHead(t, theta_t, theta_h, lt, lh)
+nfig = nfig + 1;
+animateTorsoAndHead(t, theta_t, theta_h_deg, lt, lh)
 
-%% Plot
-figure;
-plot(t, theta_t, 'b', 'LineWidth', 2); hold on;
-plot(t, theta_h, 'r', 'LineWidth', 2);
-xlabel('Time (s)');
-ylabel('Angle (degrees)');
-title('Torso and Head Angles – Rear-End Collision');
-legend('Torso', 'Head');
+%% Plot angles, velocities and accelerations
+nfig = nfig + 1;
+figure(nfig);
+subplot(4,1,1);
+plot(t, theta_t, 'b', 'LineWidth', 1); 
+hold on;
+plot(t, theta_h_deg, 'r', 'LineWidth', 1);
+xlabel('Time (s)', 'FontSize', 12);
+ylabel('Angular Acceleration (deg/s²)', 'FontSize', 12);
+title('Torso and Head Angles');
+legend('Torso', 'Head', 'best');
 grid on;
+
+subplot(4,1,2);
+plot(t, theta_t_dot, 'b', 'LineWidth', 1); 
+hold on;
+plot(t, theta_h_dot_deg, 'r', 'LineWidth', 1);
+xlabel('Time (s)', 'FontSize', 12);
+ylabel('Angular Acceleration (deg/s²)', 'FontSize', 12);
+title('Torso and Head Angular Velocities');
+grid on;
+
+subplot(4,1,3);
+plot(t, theta_t_ddot, 'b', 'LineWidth', 1); 
+hold on;
+plot(t, theta_h_ddot, 'r', 'LineWidth', 1);
+xlabel('Time (s)', 'FontSize', 12);
+ylabel('Angular Acceleration (deg/s²)', 'FontSize', 12);
+title('Torso and Head Angular Accelerations');
+grid on;
+
+subplot(4,1,4);
+plot(t, g_force, 'r', 'LineWidth', 1);
+xlabel('Time (s)', 'FontSize', 12);
+ylabel('G-Force (N)', 'FontSize', 12);
+title('Head G-Force Experienced');
+legend('Head')
+grid on;
+
+% Adjust figure size
+set(gcf, 'Position', [100 100 800 800]);
